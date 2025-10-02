@@ -27,7 +27,6 @@ const keyOf = (r: number, c: number) => `${r},${c}`;
 const inBounds = (r: number, c: number, R: number, C: number) => r >= 0 && c >= 0 && r < R && c < C;
 
 // Find ONE valid path from A(0,0) to B(R-1,C-1) following current rotations.
-// Returns a Set of "r,c" for tiles on that path; empty if no path.
 function computeSolvedPath(grid: Grid): Set<string> {
   const R = grid.length, C = grid[0]?.length ?? 0;
   const start = keyOf(0, 0), goal = keyOf(R - 1, C - 1);
@@ -89,26 +88,31 @@ export default function GameBoard() {
   const solvedPath = useMemo(() => computeSolvedPath(grid), [grid]);
   const solved = solvedPath.size > 0;
 
-  // ===== Fit the board inside the padded container (no horizontal scroll) =====
+  // ===== Responsive square board: never clipped, with side grace =====
   const hudRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const [boardSize, setBoardSize] = useState(320);
+  const [boardMaxPx, setBoardMaxPx] = useState(320);
 
   useLayoutEffect(() => {
     const update = () => {
-      const containerW = wrapperRef.current?.clientWidth ?? window.innerWidth;
-      const vh = Math.min(window.innerHeight, document.documentElement.clientHeight);
-      const hudH = hudRef.current?.getBoundingClientRect().height ?? 0;
+      // iOS-friendly viewport sizes
+      const vw = Math.floor((window.visualViewport?.width ?? window.innerWidth));
+      const vh = Math.floor((window.visualViewport?.height ?? window.innerHeight));
 
-      const sideBreathing = 8;  // small buffer so the board never kisses the edges
-      const verticalPad   = 32; // spacing below HUD
+      // Inner width of the content wrapper (inside paddings)
+      const containerW = Math.floor(wrapperRef.current?.clientWidth ?? vw);
 
-      // maximum square we can fit inside container width and viewport height
-      const maxW = containerW - sideBreathing;
-      const maxH = vh - hudH - verticalPad - 24;
-      const size = Math.max(220, Math.floor(Math.min(maxW, maxH)));
+      const hudH = Math.ceil(hudRef.current?.getBoundingClientRect().height ?? 0);
 
-      setBoardSize(size);
+      // Grace on sides and below HUD (tweakable)
+      const sideGrace = 16;       // px breathing room inside wrapper
+      const verticalGrace = 36;   // space below HUD + bottom safe area
+
+      const maxW = containerW - sideGrace;       // keep off the edges
+      const maxH = vh - hudH - verticalGrace;    // leave room for HUD & bottom
+      const size = Math.max(220, Math.min(maxW, maxH)); // lower bound so it's not tiny
+
+      setBoardMaxPx(Math.floor(size));
     };
     update();
     window.addEventListener('resize', update);
@@ -181,10 +185,11 @@ export default function GameBoard() {
         </div>
       </div>
 
-      {/* Board wrapper measured inside app-shell padding */}
-      <div ref={wrapperRef} className="w-full flex justify-center">
+      {/* Board wrapper measured inside the padded page */}
+      <div ref={wrapperRef} className="w-full flex justify-center px-1">
+        {/* Responsive square: width:100%, capped by boardMaxPx, keeps 1:1 via aspect-ratio */}
         <div
-          style={{ width: boardSize, height: boardSize }}
+          style={{ width: '100%', maxWidth: boardMaxPx, aspectRatio: '1 / 1' }}
           className="overflow-hidden rounded-2xl"
         >
           <div
