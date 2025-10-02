@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import TileView from './Tile';
 
-import type { Grid, Tile, Dir } from '../lib/pathfind';
+import type { Grid, Dir } from '../lib/pathfind';
 import { tileDirs, generateMazeGrid, connectedFromStart } from '../lib/pathfind';
 
 // ----- difficulty config -----
