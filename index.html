@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head> <meta name="mobile-web-app-capable" content="yes" />
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Zen Loops</title>
+
+    <!-- PWA manifest -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- iOS-specific PWA meta -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Zen Loops" />
+    <!-- If you add icons later, iOS uses this for the Home Screen icon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-192.png" />
+
+    <style>
+      /* Safe area for iPhone notch/home indicator */
+      body { padding-bottom: env(safe-area-inset-bottom); }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
+

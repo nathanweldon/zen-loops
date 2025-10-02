@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+/* Dark base */
+:root { 
+  color-scheme: dark; 
+}
+
+html, body, #root {
+  height: 100%;
+  background: #0f172a; /* dark bg */
+}
+
+body { 
+  color: white; 
+}
+
+/* optional: selection tint */
+::selection { background: rgba(52, 211, 153, 0.25); }
+
+/* Better taps on iPhone */
+* { -webkit-tap-highlight-color: transparent; }
+button { touch-action: manipulation; }
+
+/* Use safe-area inset on iPhone PWAs */
+@supports (padding: env(safe-area-inset-bottom)) {
+  body { padding-bottom: env(safe-area-inset-bottom); }
+}
