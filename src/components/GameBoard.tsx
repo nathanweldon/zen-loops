@@ -88,11 +88,13 @@ export default function GameBoard() {
   const solvedPath = useMemo(() => computeSolvedPath(grid), [grid]);
   const solved = solvedPath.size > 0;
 
-  // ===== Fit exactly: compute per-tile size including gaps =====
+  // ===== Fit exactly: compute per-tile size including GAP, and dynamic stroke =====
   const hudRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const [tileSize, setTileSize] = useState(40);
+  const [gapPx, setGapPx] = useState(6);
+  const [strokePx, setStrokePx] = useState(8);
   const [boardW, setBoardW] = useState(0);
   const [boardH, setBoardH] = useState(0);
 
@@ -107,8 +109,10 @@ export default function GameBoard() {
       const innerW = Math.floor(containerRef.current?.clientWidth ?? vw);
       const hudH = Math.ceil(hudRef.current?.getBoundingClientRect().height ?? 0);
 
-      // Spacing constants (tweak as desired)
-      const GAP = 6;             // px between tiles
+      // Dynamic spacing for denser boards
+      const GAP = (rows >= 7 || cols >= 7) ? 4 : (rows >= 6 || cols >= 6) ? 5 : 6;
+      setGapPx(GAP);
+
       const SIDE_BUFFER = 8;     // keep off the edges inside the container
       const VERT_BUFFER = 28;    // space below HUD and bottom safe area
 
@@ -118,11 +122,16 @@ export default function GameBoard() {
       // per-tile size that fits both width and height after subtracting gaps
       const sizeW = (maxW - GAP * (cols - 1)) / cols;
       const sizeH = (maxH - GAP * (rows - 1)) / rows;
-      const size = Math.floor(Math.max(18, Math.min(sizeW, sizeH)));
+      const size = Math.floor(Math.max(20, Math.min(sizeW, sizeH))); // raise the minimum a bit
 
       setTileSize(size);
       setBoardW(size * cols + GAP * (cols - 1));
       setBoardH(size * rows + GAP * (rows - 1));
+
+      // Stroke scales with tile size to avoid "smushed" look
+      // ~18% of tile size, clamped to [3, 8] px
+      const sw = Math.max(3, Math.min(8, Math.round(size * 0.18)));
+      setStrokePx(sw);
     };
 
     update();
@@ -162,7 +171,7 @@ export default function GameBoard() {
         </div>
       )}
 
-      {/* Controls/HUD (compact, so board can sit higher) */}
+      {/* Controls/HUD */}
       <div ref={hudRef} className="flex items-center justify-between mb-2 gap-2">
         <div className="flex items-center gap-2">
           <span className="px-2.5 py-1 rounded-full bg-white/5 text-white/80 text-sm">
@@ -203,7 +212,7 @@ export default function GameBoard() {
             style={{
               gridTemplateColumns: `repeat(${cols}, ${tileSize}px)`,
               gridAutoRows: `${tileSize}px`,
-              gap: '6px', // keep in sync with GAP above
+              gap: `${gapPx}px`,
             }}
           >
             {grid.map((row, r) =>
@@ -222,6 +231,7 @@ export default function GameBoard() {
                       pathOn={onSolvedPath}
                       isStart={isStart}
                       isEnd={isEnd}
+                      strokePx={strokePx}  // <-- NEW: thinner lines on dense boards
                       onRotate={() => rotateAt(r, c)}
                     />
                   </div>
