@@ -88,32 +88,43 @@ export default function GameBoard() {
   const solvedPath = useMemo(() => computeSolvedPath(grid), [grid]);
   const solved = solvedPath.size > 0;
 
-  // ===== Responsive square board: never clipped, with side grace =====
+  // ===== Fit exactly: compute per-tile size including gaps =====
   const hudRef = useRef<HTMLDivElement>(null);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  const [boardMaxPx, setBoardMaxPx] = useState(320);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const [tileSize, setTileSize] = useState(40);
+  const [boardW, setBoardW] = useState(0);
+  const [boardH, setBoardH] = useState(0);
 
   useLayoutEffect(() => {
     const update = () => {
-      // iOS-friendly viewport sizes
-      const vw = Math.floor((window.visualViewport?.width ?? window.innerWidth));
-      const vh = Math.floor((window.visualViewport?.height ?? window.innerHeight));
+      const rows = grid.length;
+      const cols = grid[0]?.length ?? 0;
+      if (!rows || !cols) return;
 
-      // Inner width of the content wrapper (inside paddings)
-      const containerW = Math.floor(wrapperRef.current?.clientWidth ?? vw);
-
+      const vw = Math.floor(window.visualViewport?.width ?? window.innerWidth);
+      const vh = Math.floor(window.visualViewport?.height ?? window.innerHeight);
+      const innerW = Math.floor(containerRef.current?.clientWidth ?? vw);
       const hudH = Math.ceil(hudRef.current?.getBoundingClientRect().height ?? 0);
 
-      // Grace on sides and below HUD (tweakable)
-      const sideGrace = 16;       // px breathing room inside wrapper
-      const verticalGrace = 36;   // space below HUD + bottom safe area
+      // Spacing constants (tweak as desired)
+      const GAP = 6;             // px between tiles
+      const SIDE_BUFFER = 8;     // keep off the edges inside the container
+      const VERT_BUFFER = 28;    // space below HUD and bottom safe area
 
-      const maxW = containerW - sideGrace;       // keep off the edges
-      const maxH = vh - hudH - verticalGrace;    // leave room for HUD & bottom
-      const size = Math.max(220, Math.min(maxW, maxH)); // lower bound so it's not tiny
+      const maxW = innerW - SIDE_BUFFER;
+      const maxH = vh - hudH - VERT_BUFFER;
 
-      setBoardMaxPx(Math.floor(size));
+      // per-tile size that fits both width and height after subtracting gaps
+      const sizeW = (maxW - GAP * (cols - 1)) / cols;
+      const sizeH = (maxH - GAP * (rows - 1)) / rows;
+      const size = Math.floor(Math.max(18, Math.min(sizeW, sizeH)));
+
+      setTileSize(size);
+      setBoardW(size * cols + GAP * (cols - 1));
+      setBoardH(size * rows + GAP * (rows - 1));
     };
+
     update();
     window.addEventListener('resize', update);
     window.addEventListener('orientationchange', update);
@@ -143,31 +154,27 @@ export default function GameBoard() {
   const cols = grid[0]?.length ?? 0;
 
   return (
-    <div className="w-full max-w-xl mx-auto">
-      {/* HUD */}
-      <div ref={hudRef} className="flex items-center justify-between mb-3 gap-2">
-        <div className="flex items-center gap-2 flex-1">
-          <span className="px-3 py-1 rounded-full bg-white/5 text-white/80">
-            Moves: <b>{moves}</b>
-          </span>
+    <div className="w-full">
+      {/* Status line under header */}
+      {solved && (
+        <div className="mb-2 text-primary/90 text-sm">
+          Arianna, you're awesome and you finished the game. Start a new one! Love, Nathan
+        </div>
+      )}
 
-          <span
-            className={`px-3 py-1 rounded-full ${
-              solved ? 'bg-primary/30 text-primary font-medium' : 'bg-white/5 text-white/70'
-            }`}
-          >
-            {solved
-              ? "Arianna, you're awesome and you finished the game. Start a new one! Love, Nathan"
-              : 'Not connected'}
+      {/* Controls/HUD (compact, so board can sit higher) */}
+      <div ref={hudRef} className="flex items-center justify-between mb-2 gap-2">
+        <div className="flex items-center gap-2">
+          <span className="px-2.5 py-1 rounded-full bg-white/5 text-white/80 text-sm">
+            Moves: <b>{moves}</b>
           </span>
         </div>
 
-        {/* Difficulty selector */}
         <div className="flex items-center gap-2">
           <label htmlFor="diff" className="text-white/60 text-sm">Level</label>
           <select
             id="diff"
-            className="bg-white/10 text-white/90 border border-white/10 rounded-xl px-2 py-1"
+            className="bg-white/10 text-white/90 border border-white/10 rounded-xl px-2 py-1 text-sm"
             value={difficulty}
             onChange={(e) => newBoard(e.target.value as Difficulty)}
           >
@@ -178,23 +185,26 @@ export default function GameBoard() {
 
           <button
             onClick={() => newBoard(difficulty)}
-            className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white/90 border border-white/10"
+            className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white/90 border border-white/10 text-sm"
           >
             New board
           </button>
         </div>
       </div>
 
-      {/* Board wrapper measured inside the padded page */}
-      <div ref={wrapperRef} className="w-full flex justify-center px-1">
-        {/* Responsive square: width:100%, capped by boardMaxPx, keeps 1:1 via aspect-ratio */}
+      {/* Board: left/top aligned; exact pixel width/height to include gaps */}
+      <div ref={containerRef} className="w-full">
         <div
-          style={{ width: '100%', maxWidth: boardMaxPx, aspectRatio: '1 / 1' }}
-          className="overflow-hidden rounded-2xl"
+          style={{ width: boardW, height: boardH }}
+          className="overflow-hidden"
         >
           <div
-            className="grid gap-1.5 sm:gap-2 h-full"
-            style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
+            className="grid"
+            style={{
+              gridTemplateColumns: `repeat(${cols}, ${tileSize}px)`,
+              gridAutoRows: `${tileSize}px`,
+              gap: '6px', // keep in sync with GAP above
+            }}
           >
             {grid.map((row, r) =>
               row.map((tile, c) => {
@@ -205,15 +215,16 @@ export default function GameBoard() {
                 const isEnd   = r === rows - 1 && c === cols - 1;
 
                 return (
-                  <TileView
-                    key={key}
-                    tile={tile}
-                    highlighted={highlighted}
-                    pathOn={onSolvedPath}
-                    isStart={isStart}
-                    isEnd={isEnd}
-                    onRotate={() => rotateAt(r, c)}
-                  />
+                  <div key={key} style={{ width: tileSize, height: tileSize }}>
+                    <TileView
+                      tile={tile}
+                      highlighted={highlighted}
+                      pathOn={onSolvedPath}
+                      isStart={isStart}
+                      isEnd={isEnd}
+                      onRotate={() => rotateAt(r, c)}
+                    />
+                  </div>
                 );
               })
             )}
@@ -221,7 +232,7 @@ export default function GameBoard() {
         </div>
       </div>
 
-      <p className="mt-3 text-center text-white/60 text-sm">
+      <p className="mt-3 text-white/60 text-sm">
         Rotate pieces to connect <span className="text-primary font-medium">A</span> to{' '}
         <span className="text-accent font-medium">B</span>. Some tiles are <em>blocked</em> to force a maze path.
       </p>
