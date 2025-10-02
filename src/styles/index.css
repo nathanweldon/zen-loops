@@ -27,3 +27,10 @@ button { touch-action: manipulation; }
 @supports (padding: env(safe-area-inset-bottom)) {
   body { padding-bottom: env(safe-area-inset-bottom); }
 }
+
+/* Side padding that respects iPhone safe areas */
+.app-shell {
+  /* 16px default gutter + safe-area insets on iPhone */
+  padding-left: calc(env(safe-area-inset-left, 0px) + 16px);
+  padding-right: calc(env(safe-area-inset-right, 0px) + 16px);
+}

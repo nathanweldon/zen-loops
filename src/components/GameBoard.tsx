@@ -1,5 +1,5 @@
 // src/components/GameBoard.tsx
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useLayoutEffect, useRef } from 'react';
 import TileView from './Tile';
 
 import type { Grid, Dir } from '../lib/pathfind';
@@ -18,7 +18,7 @@ function makeGridFor(d: Difficulty): Grid {
   return generateMazeGrid(cfg.rows, cfg.cols, cfg.blockFraction);
 }
 
-// ----- local helpers (direction math) -----
+// ----- helpers -----
 const dirVec: Record<Dir, [number, number]> = {
   N: [-1, 0], E: [0, 1], S: [1, 0], W: [0, -1],
 };
@@ -44,7 +44,6 @@ function computeSolvedPath(grid: Grid): Set<string> {
       const [dr, dc] = dirVec[d];
       const nr = r + dr, nc = c + dc;
       if (!inBounds(nr, nc, R, C)) continue;
-      // neighbor must open back to us
       if (!tileDirs(grid[nr][nc]).includes(opp[d])) continue;
 
       const nk = keyOf(nr, nc);
@@ -56,14 +55,13 @@ function computeSolvedPath(grid: Grid): Set<string> {
     }
   }
 
-  // reconstruct
   if (!parent.has(goal) && start !== goal) return new Set();
   const path = new Set<string>();
   let cur = goal;
   path.add(cur);
   while (cur !== start) {
     const p = parent.get(cur);
-    if (!p) return new Set(); // no path
+    if (!p) return new Set();
     path.add(p);
     cur = p;
   }
@@ -87,12 +85,39 @@ export default function GameBoard() {
 
   useEffect(() => { save(difficulty, grid); }, [grid, difficulty]);
 
-  // For gentle guidance while playing
   const connected = useMemo(() => connectedFromStart(grid), [grid]);
-
-  // Compute the actual A→B path (changes with rotations)
   const solvedPath = useMemo(() => computeSolvedPath(grid), [grid]);
   const solved = solvedPath.size > 0;
+
+  // ===== Fit the board inside the padded container (no horizontal scroll) =====
+  const hudRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [boardSize, setBoardSize] = useState(320);
+
+  useLayoutEffect(() => {
+    const update = () => {
+      const containerW = wrapperRef.current?.clientWidth ?? window.innerWidth;
+      const vh = Math.min(window.innerHeight, document.documentElement.clientHeight);
+      const hudH = hudRef.current?.getBoundingClientRect().height ?? 0;
+
+      const sideBreathing = 8;  // small buffer so the board never kisses the edges
+      const verticalPad   = 32; // spacing below HUD
+
+      // maximum square we can fit inside container width and viewport height
+      const maxW = containerW - sideBreathing;
+      const maxH = vh - hudH - verticalPad - 24;
+      const size = Math.max(220, Math.floor(Math.min(maxW, maxH)));
+
+      setBoardSize(size);
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('orientationchange', update);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('orientationchange', update);
+    };
+  }, [grid.length, grid[0]?.length]);
 
   function rotateAt(r: number, c: number) {
     setGrid(prev => {
@@ -116,13 +141,12 @@ export default function GameBoard() {
   return (
     <div className="w-full max-w-xl mx-auto">
       {/* HUD */}
-      <div className="flex items-center justify-between mb-4 gap-2">
+      <div ref={hudRef} className="flex items-center justify-between mb-3 gap-2">
         <div className="flex items-center gap-2 flex-1">
           <span className="px-3 py-1 rounded-full bg-white/5 text-white/80">
             Moves: <b>{moves}</b>
           </span>
 
-          {/* Status chip: soft green when solved, unchanged when not */}
           <span
             className={`px-3 py-1 rounded-full ${
               solved ? 'bg-primary/30 text-primary font-medium' : 'bg-white/5 text-white/70'
@@ -157,36 +181,42 @@ export default function GameBoard() {
         </div>
       </div>
 
-      {/* Grid */}
-      <div
-        className="grid gap-2 sm:gap-3"
-        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
-      >
-        {grid.map((row, r) =>
-          row.map((tile, c) => {
-            const key = `${r},${c}`;
-            const highlighted = connected.has(key);
-            const onSolvedPath = solved && solvedPath.has(key);
-            const isStart = r === 0 && c === 0;              // A
-            const isEnd   = r === rows - 1 && c === cols - 1; // B
+      {/* Board wrapper measured inside app-shell padding */}
+      <div ref={wrapperRef} className="w-full flex justify-center">
+        <div
+          style={{ width: boardSize, height: boardSize }}
+          className="overflow-hidden rounded-2xl"
+        >
+          <div
+            className="grid gap-1.5 sm:gap-2 h-full"
+            style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
+          >
+            {grid.map((row, r) =>
+              row.map((tile, c) => {
+                const key = `${r},${c}`;
+                const highlighted = connected.has(key);
+                const onSolvedPath = solved && solvedPath.has(key);
+                const isStart = r === 0 && c === 0;
+                const isEnd   = r === rows - 1 && c === cols - 1;
 
-            return (
-              <TileView
-                key={key}
-                tile={tile}
-                highlighted={highlighted}
-                isStart={isStart}
-                isEnd={isEnd}
-                // ⬇️ NEW: when solved, tiles on the A→B path get colored (handled inside Tile)
-                pathOn={onSolvedPath}
-                onRotate={() => rotateAt(r, c)}
-              />
-            );
-          })
-        )}
+                return (
+                  <TileView
+                    key={key}
+                    tile={tile}
+                    highlighted={highlighted}
+                    pathOn={onSolvedPath}
+                    isStart={isStart}
+                    isEnd={isEnd}
+                    onRotate={() => rotateAt(r, c)}
+                  />
+                );
+              })
+            )}
+          </div>
+        </div>
       </div>
 
-      <p className="mt-4 text-center text-white/60 text-sm">
+      <p className="mt-3 text-center text-white/60 text-sm">
         Rotate pieces to connect <span className="text-primary font-medium">A</span> to{' '}
         <span className="text-accent font-medium">B</span>. Some tiles are <em>blocked</em> to force a maze path.
       </p>
